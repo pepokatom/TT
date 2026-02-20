@@ -43,8 +43,8 @@ export class OpenWorldScene {
   private actionBtn!: HTMLButtonElement;
   private jumpBtn!: HTMLButtonElement;
   private dashBtn!: HTMLButtonElement;
-  private staminaBarFill!: HTMLDivElement;
-  private staminaBarBg!: HTMLDivElement;
+  private dashGaugeCircle!: SVGCircleElement;
+  private dashGaugeSvg!: SVGSVGElement;
   private nearDoor = false;
 
   constructor(engine: Engine, input: InputManager) {
@@ -111,19 +111,54 @@ export class OpenWorldScene {
     this.actionBtn.addEventListener("touchstart", (e) => e.stopPropagation());
     document.body.appendChild(this.actionBtn);
 
-    // Dash button (above action button)
+    // Dash button with circular stamina gauge (above action button)
+    const dashWrap = document.createElement("div");
+    dashWrap.style.cssText =
+      "position:fixed;right:20px;bottom:164px;width:64px;height:64px;z-index:25;";
+
+    // SVG ring gauge behind the button
+    const svgNS = "http://www.w3.org/2000/svg";
+    this.dashGaugeSvg = document.createElementNS(svgNS, "svg") as unknown as SVGSVGElement;
+    this.dashGaugeSvg.setAttribute("width", "64");
+    this.dashGaugeSvg.setAttribute("height", "64");
+    this.dashGaugeSvg.style.cssText =
+      "position:absolute;top:0;left:0;transform:rotate(-90deg);pointer-events:none;";
+
+    // Background ring (dark track)
+    const bgCircle = document.createElementNS(svgNS, "circle");
+    bgCircle.setAttribute("cx", "32"); bgCircle.setAttribute("cy", "32");
+    bgCircle.setAttribute("r", "28"); bgCircle.setAttribute("fill", "none");
+    bgCircle.setAttribute("stroke", "rgba(255,255,255,0.12)");
+    bgCircle.setAttribute("stroke-width", "5");
+    this.dashGaugeSvg.appendChild(bgCircle);
+
+    // Foreground ring (stamina indicator)
+    this.dashGaugeCircle = document.createElementNS(svgNS, "circle") as unknown as SVGCircleElement;
+    this.dashGaugeCircle.setAttribute("cx", "32"); this.dashGaugeCircle.setAttribute("cy", "32");
+    this.dashGaugeCircle.setAttribute("r", "28"); this.dashGaugeCircle.setAttribute("fill", "none");
+    this.dashGaugeCircle.setAttribute("stroke", "#e03030");
+    this.dashGaugeCircle.setAttribute("stroke-width", "5");
+    this.dashGaugeCircle.setAttribute("stroke-linecap", "round");
+    const circumference = 2 * Math.PI * 28; // ~175.93
+    this.dashGaugeCircle.setAttribute("stroke-dasharray", String(circumference));
+    this.dashGaugeCircle.setAttribute("stroke-dashoffset", "0");
+    this.dashGaugeSvg.appendChild(this.dashGaugeCircle);
+    dashWrap.appendChild(this.dashGaugeSvg);
+
+    // Actual button (centered inside the ring)
     this.dashBtn = document.createElement("button");
     this.dashBtn.textContent = "D";
     this.dashBtn.style.cssText =
-      "position:fixed;right:24px;bottom:168px;width:56px;height:56px;" +
-      "border-radius:50%;border:2px solid rgba(255,255,255,0.25);" +
+      "position:absolute;left:4px;top:4px;width:56px;height:56px;" +
+      "border-radius:50%;border:none;" +
       "background:rgba(0,0,0,0.4);color:#fff;font-size:18px;font-weight:bold;" +
-      "cursor:pointer;z-index:25;-webkit-tap-highlight-color:transparent;" +
+      "cursor:pointer;z-index:26;-webkit-tap-highlight-color:transparent;" +
       "display:flex;align-items:center;justify-content:center;" +
-      "backdrop-filter:blur(4px);transition:background 0.15s,border-color 0.15s;";
+      "backdrop-filter:blur(4px);transition:background 0.15s;";
     this.dashBtn.addEventListener("click", () => this.toggleDash());
     this.dashBtn.addEventListener("touchstart", (e) => e.stopPropagation());
-    document.body.appendChild(this.dashBtn);
+    dashWrap.appendChild(this.dashBtn);
+    document.body.appendChild(dashWrap);
 
     // Jump button (below action button)
     this.jumpBtn = document.createElement("button");
@@ -138,33 +173,12 @@ export class OpenWorldScene {
     this.jumpBtn.addEventListener("click", () => this.player.jump());
     this.jumpBtn.addEventListener("touchstart", (e) => e.stopPropagation());
     document.body.appendChild(this.jumpBtn);
-
-    // Stamina gauge (bottom-center)
-    this.staminaBarBg = document.createElement("div");
-    this.staminaBarBg.style.cssText =
-      "position:fixed;bottom:16px;left:50%;transform:translateX(-50%);" +
-      "width:160px;height:14px;border-radius:7px;" +
-      "background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);" +
-      "z-index:25;overflow:hidden;backdrop-filter:blur(4px);";
-    this.staminaBarFill = document.createElement("div");
-    this.staminaBarFill.style.cssText =
-      "width:100%;height:100%;border-radius:7px;" +
-      "background:#e03030;transition:background-color 0.3s;";
-    this.staminaBarBg.appendChild(this.staminaBarFill);
-    document.body.appendChild(this.staminaBarBg);
   }
 
   /* ---- Dash toggle ---- */
 
   private toggleDash(): void {
     this.player.dashOn = !this.player.dashOn;
-    if (this.player.dashOn) {
-      this.dashBtn.style.background = "rgba(220,60,60,0.6)";
-      this.dashBtn.style.borderColor = "rgba(255,100,100,0.7)";
-    } else {
-      this.dashBtn.style.background = "rgba(0,0,0,0.4)";
-      this.dashBtn.style.borderColor = "rgba(255,255,255,0.25)";
-    }
   }
 
   /* ---- Animals ---- */
@@ -475,22 +489,28 @@ export class OpenWorldScene {
 
   private updateStaminaGauge(): void {
     const state = this.player.staminaState;
+    const circumference = 2 * Math.PI * 28; // matches SVG r=28
+
+    // Update circular gauge
+    let ratio: number;
+    let color: string;
     if (state === "exhausted") {
-      this.staminaBarFill.style.width = (this.player.exhaustRatio * 100) + "%";
-      this.staminaBarFill.style.backgroundColor = "#3080e0";
+      ratio = this.player.exhaustRatio;
+      color = "#3080e0";
     } else {
-      this.staminaBarFill.style.width = (this.player.staminaRatio * 100) + "%";
-      this.staminaBarFill.style.backgroundColor = "#e03030";
+      ratio = this.player.staminaRatio;
+      color = "#e03030";
     }
+    const offset = circumference * (1 - ratio);
+    this.dashGaugeCircle.setAttribute("stroke-dashoffset", String(offset));
+    this.dashGaugeCircle.setAttribute("stroke", color);
 
     // Sync dash button visual with player state (handles auto-off on stop)
     if (this.player.dashOn) {
       this.dashBtn.style.background = "rgba(220,60,60,0.6)";
-      this.dashBtn.style.borderColor = "rgba(255,100,100,0.7)";
       this.dashBtn.style.opacity = (state === "exhausted") ? "0.4" : "1";
     } else {
       this.dashBtn.style.background = "rgba(0,0,0,0.4)";
-      this.dashBtn.style.borderColor = "rgba(255,255,255,0.25)";
       this.dashBtn.style.opacity = (state === "exhausted") ? "0.4" : "1";
     }
   }

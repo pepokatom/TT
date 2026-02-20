@@ -40,6 +40,7 @@ export class Player {
   private headNode: TransformNode;
   private walkPhase = 0;
   private isMoving = false;
+  private hasDashMoved = false; // true once player actually moved while dash is on
 
   // Dash / stamina
   dashOn = false;
@@ -120,9 +121,14 @@ export class Player {
       this.isMoving = true;
     }
 
-    // Auto-off dash when not moving
-    if (this.dashOn && !this.isMoving) {
+    // Track that we actually moved while dashing
+    if (this.dashOn && this.isMoving) {
+      this.hasDashMoved = true;
+    }
+    // Auto-off dash only after the player has moved and then stopped
+    if (this.dashOn && !this.isMoving && this.hasDashMoved) {
       this.dashOn = false;
+      this.hasDashMoved = false;
     }
 
     // Gravity & jump (vertical)
