@@ -445,20 +445,22 @@ export class OpenWorldScene {
   private updateStaminaGauge(): void {
     const state = this.player.staminaState;
     if (state === "exhausted") {
-      // Blue bar – shows exhaustion countdown
       this.staminaBarFill.style.width = (this.player.exhaustRatio * 100) + "%";
       this.staminaBarFill.style.backgroundColor = "#3080e0";
     } else {
-      // Red bar – shows stamina amount (normal or recovery)
       this.staminaBarFill.style.width = (this.player.staminaRatio * 100) + "%";
       this.staminaBarFill.style.backgroundColor = "#e03030";
     }
 
-    // Auto-disable dash button visual when exhausted or recovery
-    if (state === "exhausted" || (state === "recovery" && this.player.dashOn)) {
-      this.dashBtn.style.opacity = "0.4";
+    // Sync dash button visual with player state (handles auto-off on stop)
+    if (this.player.dashOn) {
+      this.dashBtn.style.background = "rgba(220,60,60,0.6)";
+      this.dashBtn.style.borderColor = "rgba(255,100,100,0.7)";
+      this.dashBtn.style.opacity = (state === "exhausted") ? "0.4" : "1";
     } else {
-      this.dashBtn.style.opacity = "1";
+      this.dashBtn.style.background = "rgba(0,0,0,0.4)";
+      this.dashBtn.style.borderColor = "rgba(255,255,255,0.25)";
+      this.dashBtn.style.opacity = (state === "exhausted") ? "0.4" : "1";
     }
   }
 

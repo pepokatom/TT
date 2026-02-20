@@ -120,6 +120,11 @@ export class Player {
       this.isMoving = true;
     }
 
+    // Auto-off dash when not moving
+    if (this.dashOn && !this.isMoving) {
+      this.dashOn = false;
+    }
+
     // Gravity & jump (vertical)
     this.velocityY += this.gravity * dt;
     const prevY = this.collider.position.y;
