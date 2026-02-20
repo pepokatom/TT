@@ -1,4 +1,5 @@
 import { Scene } from "@babylonjs/core/scene";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
@@ -6,7 +7,15 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
 import { AssetFactory } from "../core/AssetFactory";
 
+export interface DoorInfo {
+  pivot: TransformNode;
+  isOpen: boolean;
+  currentAngle: number;
+}
+
 export class OpenWorld {
+  readonly doors: DoorInfo[] = [];
+
   constructor(scene: Scene, shadowGen: ShadowGenerator) {
     this.buildGround(scene);
     this.buildRoads(scene);
@@ -87,10 +96,11 @@ export class OpenWorld {
     ];
 
     for (const h of houses) {
-      const house = AssetFactory.createHouse(scene, h.w, h.h, h.d, h.wall, h.roof);
+      const { root: house, doorPivot } = AssetFactory.createHouse(scene, h.w, h.h, h.d, h.wall, h.roof);
       house.position.set(h.x, 0, h.z);
       house.rotation.y = h.ry;
       house.getChildMeshes().forEach((m) => shadowGen.addShadowCaster(m));
+      this.doors.push({ pivot: doorPivot, isOpen: false, currentAngle: 0 });
     }
   }
 

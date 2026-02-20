@@ -4,17 +4,19 @@ import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { Engine, ViewMode } from "../core/Engine";
 import { InputManager } from "../core/InputManager";
 import { Player } from "../entities/Player";
-import { OpenWorld } from "../world/OpenWorld";
+import { OpenWorld, DoorInfo } from "../world/OpenWorld";
 
 const CAMERA_SENSITIVITY = 0.005;
 const FPS_YAW_SENSITIVITY = 0.004;
 const FPS_PITCH_SENSITIVITY = 0.003;
 const TRANSITION_DURATION = 0.5;
+const DOOR_INTERACT_RANGE = 3;
 
 export class OpenWorldScene {
   private engine: Engine;
   private input: InputManager;
   private player!: Player;
+  private world!: OpenWorld;
 
   // First-person camera state
   private fpsYaw = 0;
@@ -31,6 +33,8 @@ export class OpenWorldScene {
 
   // UI
   private viewToggleBtn!: HTMLButtonElement;
+  private actionBtn!: HTMLButtonElement;
+  private nearDoor = false;
 
   constructor(engine: Engine, input: InputManager) {
     this.engine = engine;
@@ -40,7 +44,7 @@ export class OpenWorldScene {
   init(): void {
     const scene = this.engine.scene;
 
-    new OpenWorld(scene, this.engine.shadowGenerator);
+    this.world = new OpenWorld(scene, this.engine.shadowGenerator);
 
     this.player = new Player(
       scene,
@@ -75,10 +79,26 @@ export class OpenWorldScene {
       "display:flex;align-items:center;justify-content:center;" +
       "backdrop-filter:blur(4px);transition:background 0.15s;";
     this.viewToggleBtn.addEventListener("click", () => this.toggleView());
-    // Prevent touch events on button from propagating to canvas
     this.viewToggleBtn.addEventListener("touchstart", (e) => e.stopPropagation());
     document.body.appendChild(this.viewToggleBtn);
+
+    // Action button (above view toggle)
+    this.actionBtn = document.createElement("button");
+    this.actionBtn.textContent = "A";
+    this.actionBtn.style.cssText =
+      "position:fixed;right:24px;bottom:96px;width:56px;height:56px;" +
+      "border-radius:50%;border:2px solid rgba(255,255,255,0.25);" +
+      "background:rgba(0,0,0,0.4);color:#fff;font-size:20px;font-weight:bold;" +
+      "cursor:pointer;z-index:25;-webkit-tap-highlight-color:transparent;" +
+      "display:flex;align-items:center;justify-content:center;" +
+      "backdrop-filter:blur(4px);transition:background 0.15s,opacity 0.2s,border-color 0.2s;" +
+      "opacity:0.4;";
+    this.actionBtn.addEventListener("click", () => this.tryInteract());
+    this.actionBtn.addEventListener("touchstart", (e) => e.stopPropagation());
+    document.body.appendChild(this.actionBtn);
   }
+
+  /* ---- View toggle / camera transition ---- */
 
   private toggleView(): void {
     if (this.isTransitioning) return;
@@ -121,12 +141,20 @@ export class OpenWorldScene {
     this.viewToggleBtn.textContent = next === "first" ? "3P" : "1P";
   }
 
+  /* ---- Main update ---- */
+
   private update(dt: number): void {
-    // During transition, keep using old viewMode for player controls
-    this.player.update(dt, this.engine.viewMode, this.fpsYaw);
+    // Animate doors every frame
+    this.animateDoors(dt);
+
+    // Player movement (pass camera alpha for third-person input rotation)
+    this.player.update(dt, this.engine.viewMode, this.fpsYaw, this.engine.thirdPersonCam.alpha);
 
     const camDelta = this.input.consumeCameraDelta();
     const pos = this.player.getPosition();
+
+    // Update action button hint
+    this.updateActionHint(pos);
 
     if (this.isTransitioning) {
       this.updateTransition(dt, pos);
@@ -202,6 +230,63 @@ export class OpenWorldScene {
       this.player.mesh.setEnabled(false);
     }
   }
+
+  /* ---- Door interaction ---- */
+
+  private tryInteract(): void {
+    const playerPos = this.player.getPosition();
+    let nearest: DoorInfo | null = null;
+    let nearestDist = Infinity;
+
+    for (const door of this.world.doors) {
+      const doorPos = door.pivot.getAbsolutePosition();
+      const dx = playerPos.x - doorPos.x;
+      const dz = playerPos.z - doorPos.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < DOOR_INTERACT_RANGE && dist < nearestDist) {
+        nearest = door;
+        nearestDist = dist;
+      }
+    }
+
+    if (nearest) {
+      nearest.isOpen = !nearest.isOpen;
+    }
+  }
+
+  private animateDoors(dt: number): void {
+    for (const door of this.world.doors) {
+      const target = door.isOpen ? -Math.PI / 2 : 0;
+      const diff = target - door.currentAngle;
+      if (Math.abs(diff) > 0.01) {
+        door.currentAngle += diff * Math.min(1, dt * 8);
+        door.pivot.rotation.y = door.currentAngle;
+      }
+    }
+  }
+
+  private updateActionHint(playerPos: Vector3): void {
+    let near = false;
+    for (const door of this.world.doors) {
+      const doorPos = door.pivot.getAbsolutePosition();
+      const dx = playerPos.x - doorPos.x;
+      const dz = playerPos.z - doorPos.z;
+      if (dx * dx + dz * dz < DOOR_INTERACT_RANGE * DOOR_INTERACT_RANGE) {
+        near = true;
+        break;
+      }
+    }
+
+    if (near !== this.nearDoor) {
+      this.nearDoor = near;
+      this.actionBtn.style.opacity = near ? "1" : "0.4";
+      this.actionBtn.style.borderColor = near
+        ? "rgba(100,200,255,0.7)"
+        : "rgba(255,255,255,0.25)";
+    }
+  }
+
+  /* ---- Camera updates ---- */
 
   private updateThirdPerson(camDelta: { dx: number; dy: number }, pos: Vector3): void {
     const cam = this.engine.thirdPersonCam;

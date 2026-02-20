@@ -64,8 +64,8 @@ export class AssetFactory {
     return root;
   }
 
-  /** Simple house with walls and roof */
-  static createHouse(scene: Scene, w: number, h: number, d: number, wallColor: Color3, roofColor: Color3): TransformNode {
+  /** Simple house with walls and roof; returns door pivot for interaction */
+  static createHouse(scene: Scene, w: number, h: number, d: number, wallColor: Color3, roofColor: Color3): { root: TransformNode; doorPivot: TransformNode } {
     const root = new TransformNode("house", scene);
 
     const wallMat = mat(scene, wallColor.r, wallColor.g, wallColor.b);
@@ -94,12 +94,16 @@ export class AssetFactory {
     tip.position.y = h + 0.7;
     tip.parent = root;
 
-    // Door
+    // Door with pivot at hinge edge (for open/close animation)
     const doorMat = mat(scene, 0.35, 0.22, 0.1);
+    const doorPivot = new TransformNode("doorPivot", scene);
+    doorPivot.position.set(-0.3, 0, d / 2 + 0.03);
+    doorPivot.parent = root;
+
     const door = CreateBox("door", { width: 0.6, height: 1.2, depth: 0.05 }, scene);
     door.material = doorMat;
-    door.position.set(0, 0.6, d / 2 + 0.03);
-    door.parent = root;
+    door.position.set(0.3, 0.6, 0);
+    door.parent = doorPivot;
 
     // Windows
     const winMat = mat(scene, 0.6, 0.8, 1.0);
@@ -114,7 +118,7 @@ export class AssetFactory {
       win.parent = root;
     });
 
-    return root;
+    return { root, doorPivot };
   }
 
   /** Tall building / apartment */
@@ -207,6 +211,7 @@ export class AssetFactory {
     trunk.material = trunkMat;
     trunk.position.y = 0.75;
     trunk.parent = root;
+    trunk.checkCollisions = true;
 
     const foliageMat = mat(scene, 0.18, 0.55, 0.27);
     const foliage = CreateSphere("foliage", { diameter: 1.8, segments: 8 }, scene);
@@ -226,6 +231,7 @@ export class AssetFactory {
     pole.material = poleMat;
     pole.position.y = 2;
     pole.parent = root;
+    pole.checkCollisions = true;
 
     const arm = CreateBox("arm", { width: 1, height: 0.08, depth: 0.08 }, scene);
     arm.material = poleMat;
