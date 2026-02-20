@@ -106,16 +106,17 @@ export class OpenWorldScene {
     const serverUrl = this.getServerUrl();
     console.log(`[OpenWorldScene] Connecting to ${serverUrl}...`);
 
-    // Certificate hash for local development (self-signed cert, valid 14 days max)
+    // Certificate hashes for self-signed certs (valid 14 days max for WebTransport)
     // Regenerate with: openssl x509 -in certs/cert.pem -outform DER | openssl dgst -sha256 -binary | base64
     const localCertHash = "KaM/L3KMsluA7PVQM/dAhSMO/kK3U4Md2A0lke9FCWg=";
+    const flyioCertHash = "uZHdl3g6ZA1OueKY6xGKwPLc6+2TFCfS4MOml15yg6A=";
     const isLocalhost = serverUrl.includes("localhost") || serverUrl.includes("127.0.0.1");
 
     this.networkManager = new NetworkManager({
       serverUrl,
       reconnectAttempts: 5,
       reconnectDelayMs: 2000,
-      certHash: isLocalhost ? localCertHash : undefined,
+      certHash: isLocalhost ? localCertHash : flyioCertHash,
     });
 
     this.networkManager.onEvent = (event) => this.handleNetworkEvent(event);

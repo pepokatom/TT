@@ -50,10 +50,14 @@ export class NetworkManager {
         options.serverCertificateHashes = [
           {
             algorithm: "sha-256",
-            value: hashBytes,
+            value: hashBytes.buffer,
           },
         ];
+        const hashHex = Array.from(hashBytes)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join(":");
         console.log("[Network] Using certificate hash for self-signed cert");
+        console.log("[Network] Hash:", hashHex);
       }
 
       this.transport = new WebTransport(this.config.serverUrl, options);
