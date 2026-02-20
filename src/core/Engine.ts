@@ -37,13 +37,13 @@ export class Engine {
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement("canvas");
-    this.canvas.style.cssText = "width:100%;height:100%;display:block;touch-action:none;";
     this.canvas.id = "renderCanvas";
     container.appendChild(this.canvas);
 
     this.engine = new BabylonEngine(this.canvas, true, {
       preserveDrawingBuffer: true,
       stencil: true,
+      adaptToDeviceRatio: true,
     });
 
     this.scene = new Scene(this.engine);
