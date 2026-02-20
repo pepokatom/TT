@@ -1,98 +1,102 @@
-import * as THREE from "three";
-import * as CANNON from "cannon-es";
+import { Engine as BabylonEngine } from "@babylonjs/core/Engines/engine";
+import { Scene } from "@babylonjs/core/scene";
+import { ArcRotateCamera } from "@babylonjs/core/Cameras/arcRotateCamera";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import { DirectionalLight } from "@babylonjs/core/Lights/directionalLight";
+import { ShadowGenerator } from "@babylonjs/core/Lights/Shadows/shadowGenerator";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
+
+// Side-effect imports for Babylon.js features
+import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
+import "@babylonjs/core/Materials/standardMaterial";
+import "@babylonjs/core/Meshes/meshBuilder";
+import "@babylonjs/core/Collisions/collisionCoordinator";
 
 export class Engine {
-  readonly renderer: THREE.WebGLRenderer;
-  readonly scene: THREE.Scene;
-  readonly camera: THREE.PerspectiveCamera;
-  readonly physicsWorld: CANNON.World;
+  readonly engine: BabylonEngine;
+  readonly scene: Scene;
+  readonly camera: ArcRotateCamera;
+  readonly canvas: HTMLCanvasElement;
+  readonly shadowGenerator: ShadowGenerator;
 
-  private clock = new THREE.Clock();
   private updateCallbacks: ((dt: number) => void)[] = [];
 
   constructor(container: HTMLElement) {
-    // Renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(this.renderer.domElement);
+    this.canvas = document.createElement("canvas");
+    this.canvas.style.width = "100%";
+    this.canvas.style.height = "100%";
+    this.canvas.style.display = "block";
+    this.canvas.id = "renderCanvas";
+    container.appendChild(this.canvas);
 
-    // Scene
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87ceeb); // sky blue
-    this.scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
+    this.engine = new BabylonEngine(this.canvas, true, {
+      preserveDrawingBuffer: true,
+      stencil: true,
+    });
 
-    // Camera (third-person overhead)
-    this.camera = new THREE.PerspectiveCamera(
-      50,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      200
+    this.scene = new Scene(this.engine);
+    this.scene.clearColor = new Color4(0.53, 0.81, 0.92, 1);
+    this.scene.ambientColor = new Color3(0.3, 0.3, 0.3);
+    this.scene.fogMode = Scene.FOGMODE_LINEAR;
+    this.scene.fogColor = new Color3(0.53, 0.81, 0.92);
+    this.scene.fogStart = 60;
+    this.scene.fogEnd = 150;
+    this.scene.collisionsEnabled = true;
+
+    // Third-person follow camera
+    this.camera = new ArcRotateCamera(
+      "camera",
+      -Math.PI / 2,
+      Math.PI / 3.5,
+      18,
+      Vector3.Zero(),
+      this.scene
     );
-    this.camera.position.set(0, 12, 10);
-    this.camera.lookAt(0, 0, 0);
+    this.camera.lowerBetaLimit = 0.3;
+    this.camera.upperBetaLimit = Math.PI / 2.5;
+    this.camera.lowerRadiusLimit = 8;
+    this.camera.upperRadiusLimit = 35;
+    this.camera.attachControl(this.canvas, false);
+    this.camera.inputs.removeByType("ArcRotateCameraPointersInput");
 
     // Lighting
-    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-    this.scene.add(ambient);
+    const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), this.scene);
+    hemi.intensity = 0.6;
+    hemi.groundColor = new Color3(0.3, 0.35, 0.4);
 
-    const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-    sun.position.set(10, 20, 10);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.near = 0.5;
-    sun.shadow.camera.far = 60;
-    sun.shadow.camera.left = -30;
-    sun.shadow.camera.right = 30;
-    sun.shadow.camera.top = 30;
-    sun.shadow.camera.bottom = -30;
-    this.scene.add(sun);
+    const sun = new DirectionalLight("sun", new Vector3(-1, -3, -1).normalize(), this.scene);
+    sun.intensity = 0.8;
+    sun.position = new Vector3(30, 50, 30);
 
-    // Physics
-    this.physicsWorld = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-    this.physicsWorld.broadphase = new CANNON.SAPBroadphase(this.physicsWorld);
+    this.shadowGenerator = new ShadowGenerator(2048, sun);
+    this.shadowGenerator.useBlurExponentialShadowMap = true;
+    this.shadowGenerator.blurKernel = 32;
 
-    // Resize
-    window.addEventListener("resize", this.onResize);
+    window.addEventListener("resize", () => this.engine.resize());
   }
-
-  private onResize = () => {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-  };
 
   onUpdate(cb: (dt: number) => void): void {
     this.updateCallbacks.push(cb);
   }
 
-  removeUpdate(cb: (dt: number) => void): void {
-    const idx = this.updateCallbacks.indexOf(cb);
-    if (idx !== -1) this.updateCallbacks.splice(idx, 1);
-  }
-
   start(): void {
-    const loop = () => {
-      requestAnimationFrame(loop);
-      const dt = this.clock.getDelta();
-      // Cap delta to avoid spiral of death
+    this.engine.runRenderLoop(() => {
+      const dt = this.engine.getDeltaTime() / 1000;
       const cappedDt = Math.min(dt, 1 / 30);
-
-      this.physicsWorld.step(1 / 60, cappedDt, 3);
 
       for (const cb of this.updateCallbacks) {
         cb(cappedDt);
       }
 
-      this.renderer.render(this.scene, this.camera);
-    };
-    loop();
+      this.scene.render();
+    });
   }
 
   dispose(): void {
-    window.removeEventListener("resize", this.onResize);
-    this.renderer.dispose();
+    this.engine.stopRenderLoop();
+    this.scene.dispose();
+    this.engine.dispose();
+    this.canvas.remove();
   }
 }

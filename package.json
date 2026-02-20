@@ -1,7 +1,7 @@
 {
   "name": "tt",
-  "version": "1.0.0",
-  "description": "Mobile game built with Phaser 3 + TypeScript + Capacitor",
+  "version": "2.0.0",
+  "description": "Open world exploration game built with Babylon.js + TypeScript",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,13 +23,11 @@
     "@capacitor/cli": "^8.1.0",
     "@capacitor/core": "^8.1.0",
     "@capacitor/ios": "^8.1.0",
-    "@types/three": "^0.183.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
   },
   "dependencies": {
-    "cannon-es": "^0.20.0",
-    "colyseus.js": "^0.16.22",
-    "three": "^0.183.0"
+    "@babylonjs/core": "^7.0.0",
+    "colyseus.js": "^0.16.22"
   }
 }
